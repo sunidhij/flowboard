@@ -1,0 +1,10 @@
+{
+  // Cloudflare Workers static-assets deployment (npx wrangler deploy after npm run build).
+  "name": "flowboard",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist",
+    // serve index.html for unknown paths so deep links like /lists/ls_sprint work on refresh
+    "not_found_handling": "single-page-application"
+  }
+}
