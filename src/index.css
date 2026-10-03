@@ -1,0 +1,4 @@
+/* Tailwind entry point only — no custom CSS. All styling lives in utility classes. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

@@ -1,0 +1,128 @@
+<!doctype html>
+<!--
+  Source for docs/architecture.png (the diagram embedded in the README).
+  To re-render after editing: open this file in a browser and screenshot #diagram,
+  or use any headless browser (e.g. Playwright) at deviceScaleFactor 2.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Flowboard architecture</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
+<style>
+  :root { --ink:#1a1d26; --muted:#5b6273; --line:#94a3b8; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:#fff; font-family:Inter, system-ui, sans-serif; color:var(--ink); }
+  #diagram { width:1180px; padding:28px 32px 32px; background:#fff; }
+  h1 { margin:0 0 4px; font-size:22px; font-weight:700; }
+  .sub { margin:0 0 22px; color:var(--muted); font-size:13.5px; }
+  .band { border:2px solid; border-radius:14px; padding:14px 16px 16px; }
+  .band-title { display:flex; align-items:baseline; gap:10px; margin-bottom:12px; font-weight:700; font-size:15px; }
+  .band-title code { font-family:'JetBrains Mono', monospace; font-weight:500; font-size:12px; color:var(--muted); }
+  .ui { border-color:#2550eb; background:#f6f9ff; }
+  .store { border-color:#7c3aed; background:#faf8ff; }
+  .domain { border-color:#059669; background:#f4fcf8; }
+  .row { display:flex; gap:10px; }
+  .box { flex:1; background:#fff; border:1.5px solid; border-radius:10px; padding:9px 11px; font-size:13px; line-height:1.35; }
+  .box b { display:block; font-size:13.5px; margin-bottom:2px; }
+  .box span { color:var(--muted); font-size:12px; }
+  .box code { font-family:'JetBrains Mono', monospace; font-size:12px; font-weight:500; }
+  .ui .box { border-color:#bfd3fe; }
+  .store .box { border-color:#ddd6fe; }
+  .domain .box { border-color:#a7f3d0; }
+  .storage { border-color:#fdba74 !important; background:#fff7ed !important; }
+  .flow { display:flex; align-items:center; justify-content:space-around; height:46px; color:var(--muted); font-size:12.5px; font-weight:600; }
+  .flow div { display:flex; align-items:center; gap:8px; }
+  .arrow-down { font-size:20px; color:var(--line); line-height:1; }
+  .paths { display:grid; grid-template-columns: 1fr 2.1fr; gap:14px; }
+  .path { border:1.5px dashed #ddd6fe; border-radius:10px; padding:10px; background:#fff; }
+  .path-title { font-size:11.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:#7c3aed; margin-bottom:8px; }
+  .chain { display:flex; align-items:stretch; gap:6px; }
+  .chain .box { flex:1; }
+  .to { align-self:center; color:var(--line); font-size:18px; }
+  .to small { display:block; font-size:10.5px; color:var(--muted); font-weight:600; text-align:center; margin-top:-2px; }
+  .col { display:flex; flex-direction:column; gap:6px; }
+  .note { margin-top:18px; display:flex; gap:22px; color:var(--muted); font-size:12.5px; }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
+</style>
+</head>
+<body>
+<div id="diagram">
+  <h1>Flowboard architecture</h1>
+  <p class="sub">UI components read through permission-filtered selectors and write through a fake async API. All business rules live in pure domain functions, and reducers only commit their results.</p>
+
+  <!-- UI -->
+  <section class="band ui">
+    <div class="band-title">UI components <code>src/features/* · src/components/ui/*</code></div>
+    <div class="row">
+      <div class="box"><b>App shell</b><span>AppShell · TopBar · UserSwitcher</span></div>
+      <div class="box"><b>Sidebar tree</b><span>Sidebar · TreeNode · ContainerMenu</span></div>
+      <div class="box"><b>Kanban board</b><span>KanbanBoard · KanbanColumn · TaskCard</span></div>
+      <div class="box"><b>List view</b><span>TaskListView · BulkActionBar</span></div>
+      <div class="box"><b>Task drawer</b><span>CreateTaskForm · EditTaskForm</span></div>
+      <div class="box"><b>Activity feed</b><span>ActivityFeed</span></div>
+    </div>
+  </section>
+
+  <div class="flow">
+    <div><span class="arrow-down">↓</span> reads (useAppSelector)</div>
+    <div><span class="arrow-down">↓</span> writes (dispatch via api.ts)</div>
+  </div>
+
+  <!-- STORE -->
+  <section class="band store">
+    <div class="band-title">Store <code>src/store/* · Redux Toolkit</code></div>
+    <div class="paths">
+      <div class="path">
+        <div class="path-title">Read path</div>
+        <div class="col">
+          <div class="box"><b><code>hooks.ts</code></b><span>useAppSelector · createSelector (memoised tree, users)</span></div>
+          <div class="to" style="text-align:center">↓</div>
+          <div class="box"><b><code>selectors.ts</code></b><span>every read filtered by the acting user's permissions</span></div>
+        </div>
+      </div>
+      <div class="path">
+        <div class="path-title">Write path</div>
+        <div class="chain">
+          <div class="box"><b><code>api.ts</code></b><span>fake async API: latency, 403 on fetch, failure toggle, optimistic move + rollback</span></div>
+          <div class="to">→</div>
+          <div class="box"><b><code>thunks.ts</code></b><span>runMutation as the current user; returns <code>Result</code></span></div>
+          <div class="to">→<small>run</small></div>
+          <div class="box"><b><code>mutations/*</code></b><span>pure <code>(data, ctx, input) → Result</code></span></div>
+          <div class="to">→<small>dataCommitted</small></div>
+          <div class="box"><b><code>slices/</code></b><span>workspace (persisted) · ui</span></div>
+        </div>
+        <div class="chain" style="margin-top:8px">
+          <div class="box" style="flex:2.2"><b><code>store.ts</code></b><span>configureStore · listener middleware saves the workspace slice</span></div>
+          <div class="to">⇄<small>save / load</small></div>
+          <div class="box storage"><b>localStorage</b><span><code>flowboard:v1</code> · versioned, shape-checked</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="flow">
+    <div><span class="arrow-down">↓</span> selectors check permissions</div>
+    <div><span class="arrow-down">↓</span> mutations run permission → validation → integrity</div>
+  </div>
+
+  <!-- DOMAIN -->
+  <section class="band domain">
+    <div class="band-title">Domain rules <code>src/domain/* · pure TypeScript, no React</code></div>
+    <div class="row">
+      <div class="box"><b><code>permissions.ts</code></b><span>top-down visibility · deny beats allow · admin bypass</span></div>
+      <div class="box"><b><code>validators.ts</code></b><span>hierarchy rules · task field validation</span></div>
+      <div class="box"><b><code>ordering.ts · statusMapping.ts</code></b><span>sibling positions · status remap between lists</span></div>
+      <div class="box"><b><code>errors.ts</code></b><span><code>Result</code> · FORBIDDEN · NOT_FOUND · VALIDATION · CONFLICT</span></div>
+    </div>
+  </section>
+
+  <div class="note">
+    <span><i class="dot" style="background:#2550eb"></i>UI renders and dispatches</span>
+    <span><i class="dot" style="background:#7c3aed"></i>Store holds state and wiring</span>
+    <span><i class="dot" style="background:#059669"></i>Domain holds every business rule</span>
+    <span><i class="dot" style="background:#ea580c"></i>Persistence</span>
+  </div>
+</div>
+</body>
+</html>
