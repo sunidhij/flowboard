@@ -34,7 +34,8 @@ describe('App', () => {
     // Carol can't open Backlog → she's taken to her own list, with an explanation (no "Access denied")
     expect(await screen.findByRole('region', { name: /^Ideas column/ })).toBeInTheDocument();
     expect(screen.queryByText('Access denied')).not.toBeInTheDocument();
-    expect(screen.getByText('Now viewing as Carol Diaz. “Backlog” isn’t shared with them, so “Social” was opened.')).toBeInTheDocument();
+    expect(screen.getByText('“Backlog” isn’t shared with Carol Diaz, so “Social” was opened.')).toBeInTheDocument();
+    expect(screen.queryByText(/Now viewing as/)).not.toBeInTheDocument();
   });
 
   it('switching to a user who can see the open list keeps it open', async () => {
@@ -43,7 +44,7 @@ describe('App', () => {
     await screen.findByRole('region', { name: /^In review column/ });
     await switchTo(user, /Bob Chen/);
     expect(store.getState().workspace.selectedListId).toBe(IDS.sprint);
-    expect(await screen.findByText('Now viewing as Bob Chen')).toBeInTheDocument();
+    expect(screen.queryByText(/Now viewing as/)).not.toBeInTheDocument(); // plain switch: no snackbar
   });
 
   it('admin can build a space → folder → list hierarchy from the sidebar', async () => {
