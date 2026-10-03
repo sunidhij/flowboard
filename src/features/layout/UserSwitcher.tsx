@@ -54,19 +54,8 @@ export function UserSwitcher() {
             <MenuItem key={u.id}>
               <button
                 type="button"
-                onClick={() => {
-                  const r = dispatch(switchUser(u.id));
-                  if (!r.ok || u.id === current.id) return;
-                  // no toast for a plain switch; only explain when the open list had to change
-                  const { redirectedFrom, openedListId } = r.data;
-                  const from = redirectedFrom ? data.containers[redirectedFrom]?.name : null;
-                  if (!from) return;
-                  const to = openedListId ? data.containers[openedListId]?.name : null;
-                  dispatch(pushToast({
-                    kind: 'info',
-                    message: `“${from}” isn’t shared with ${u.name}${to ? `, so “${to}” was opened` : ''}.`,
-                  }));
-                }}
+                // switching is silent; if the open list isn't shared with the new user, the store redirects
+                onClick={() => dispatch(switchUser(u.id))}
                 className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left data-[focus]:bg-surface-muted"
               >
                 <Avatar user={u} size="md" className="ring-0" />

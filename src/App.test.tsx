@@ -31,11 +31,10 @@ describe('App', () => {
 
     await switchTo(user, /Carol Diaz/);
     expect(within(sidebar()).queryByText('Backlog')).not.toBeInTheDocument();
-    // Carol can't open Backlog → she's taken to her own list, with an explanation (no "Access denied")
+    // Carol can't open Backlog → she's silently taken to her own list (no "Access denied", no snackbar)
     expect(await screen.findByRole('region', { name: /^Ideas column/ })).toBeInTheDocument();
     expect(screen.queryByText('Access denied')).not.toBeInTheDocument();
-    expect(screen.getByText('“Backlog” isn’t shared with Carol Diaz, so “Social” was opened.')).toBeInTheDocument();
-    expect(screen.queryByText(/Now viewing as/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/isn’t shared|Now viewing as/)).not.toBeInTheDocument();
   });
 
   it('switching to a user who can see the open list keeps it open', async () => {
