@@ -5,6 +5,7 @@ A mini project-management app for a single workspace: **Workspace → Space → 
 **Stack:** React 18 · TypeScript (strict) · Vite · Tailwind CSS · Redux Toolkit · dnd-kit · Headless UI · Vitest + Testing Library · Playwright
 
 ---
+Cloudflare Deployment Link - https://flowboard.sunidhijain2002.workers.dev
 
 ## 1. How to run locally
 
@@ -143,7 +144,7 @@ Acme Inc.
 1. **Optimistic UI on drag-and-drop, with rollback.** A move is applied immediately, then "persisted". On failure, exactly the tasks it touched are restored and its activity entry is removed. Try it with the **Simulate failures** toggle.
 2. **Activity feed.** Task and container changes are logged (e.g. "Alice moved *Fix login* from To do to Done"). They're shown per list and per task, and filtered by permission.
 3. **Deployed preview on Cloudflare Pages.** 
-   - **Live URL:** _to be added once deployed_
+   - **Live URL:** https://flowboard.sunidhijain2002.workers.dev
 
 ---
 
