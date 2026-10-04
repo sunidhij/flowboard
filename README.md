@@ -6,6 +6,8 @@ A small project-management app: Workspace → Space → (Folder) → List → Ta
 
 Built with React 18, TypeScript, Vite, Tailwind CSS, Redux Toolkit, dnd-kit and Headless UI. Tested with Vitest, Testing Library and Playwright.
 
+Demo Video - https://www.loom.com/share/238ef94250894beb98dcfb625b5de52c
+
 ## How to run locally
 
 You need Node.js 22.22.2 or newer (or 24.15+ / 26+), npm and Git.
