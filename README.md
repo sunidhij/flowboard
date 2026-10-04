@@ -1,189 +1,126 @@
 # Flowboard
 
-A mini project-management app for a single workspace: **Workspace → Space → (Folder) → List → Tasks**, a **Kanban board** and a **list view** for each list, and a grant-based permission model. There's no backend; a typed client store seeded from fixtures stands in for the API and database.
+[![Live](https://img.shields.io/badge/live-flowboard.sunidhijain2002.workers.dev-2563eb)](https://flowboard.sunidhijain2002.workers.dev/)
 
-**Stack:** React 18 · TypeScript (strict) · Vite · Tailwind CSS · Redux Toolkit · dnd-kit · Headless UI · Vitest + Testing Library · Playwright
+A small project-management app: Workspace → Space → (Folder) → List → Tasks, with a Kanban board, a list view and per-user permissions. There's no backend. A typed client store with seed data stands in for the API.
 
----
-Cloudflare Deployment Link - https://flowboard.sunidhijain2002.workers.dev
+Built with React 18, TypeScript, Vite, Tailwind CSS, Redux Toolkit, dnd-kit and Headless UI. Tested with Vitest, Testing Library and Playwright.
 
-## 1. How to run locally
+## How to run locally
 
-**Prerequisites**
-- **Node.js 22.22.2 or newer** (or 24.15+ / 26+). The test tools (Vitest, jsdom) need it; the app alone runs on 22.12+. Check with `node -v`.
-- **npm**, which comes with Node.js.
-- **Git**, to clone the repository.
-- For the end-to-end tests only: Playwright's Chromium, a one-time download with `npx playwright install chromium`. On Linux, use `npx playwright install --with-deps chromium` to install its system libraries too.
-
-**Run**
+You need Node.js 22.22.2 or newer (or 24.15+ / 26+), npm and Git.
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/sunidhij/flowboard.git
 cd flowboard
 npm install
-npm run dev            # http://localhost:5173
+npm run dev        # http://localhost:5173
 ```
 
-| Script | What it does |
-|---|---|
-| `npm run dev` | Vite dev server |
-| `npm run build` | Type-check + production build |
-| `npm run lint` | ESLint |
-| `npm test` | Unit, store and component tests (Vitest) |
-| `npm run test:e2e` | End-to-end tests (Playwright; needs the Chromium download above) |
+Other scripts:
 
-Use the user switcher (top right) to switch between **Alice** (admin), **Bob** and **Carol** (members). **Reset demo data** in the same menu restores the seed.
+- `npm run build`: type-check and build for production
+- `npm run lint`: ESLint
+- `npm test`: unit and component tests
+- `npm run test:e2e`: end-to-end tests (run `npx playwright install chromium` once first)
 
----
+Use the user menu in the top right to switch between Alice (admin), Bob and Carol (members). "Reset demo data" in the same menu restores the seed.
 
-## 2. Architecture
+## Architecture
 
-![Flowboard architecture: UI components read through permission-filtered selectors and write through a fake async API into Redux Toolkit thunks, which run pure domain mutations and commit results to slices persisted in localStorage](docs/architecture.png)
+![Flowboard architecture](docs/architecture.png)
 
-The app has three layers: React components for the UI, a Redux Toolkit store for state, and pure domain functions that hold every business rule. Components read through selectors that filter everything by the current user's permissions, so the UI never receives data it shouldn't show. Writes go through a fake async API into thunks, which run a pure mutation (permission check, then validation, then integrity rules) and commit the result to the store only if it succeeds. Because the rules live outside React and Redux, they're unit-tested on their own, and replacing the fake API with a real backend wouldn't change any component. The workspace state is saved to localStorage, so changes survive a reload.
+There are three layers. React components show the UI. A Redux Toolkit store holds the state. Plain TypeScript functions hold all the business rules.
 
----
+Components read data through selectors that only return what the current user is allowed to see. Writes go through a fake async API (`store/api.ts`) that runs a pure mutation: check permissions, validate, then save. If any step fails, nothing changes and the UI gets an error. The workspace is saved to localStorage, so changes survive a reload.
 
-## 3. Data model
+## Data model
 
-Entities are stored normalised as `Record<id, Entity>` (`src/domain/types.ts`).
+Data is stored as `Record<id, Entity>` maps (`src/domain/types.ts`).
 
 | Entity | Fields |
 |---|---|
-| `Container` | `id, name, type: workspace\|space\|folder\|list, parentId, position, visibility: public\|private, archivedAt?` |
-| `Status` | `id, listId, name, category: todo\|in_progress\|done, color, position` — each list owns its set |
-| `Task` | `id, title (≤500), description?, statusId, priority: urgent\|high\|normal\|low\|none, assigneeIds[], dueDate? (ISO), position, primaryListId, parentTaskId?, createdAt, updatedAt, archivedAt?` |
-| `User` | `id, name, role: admin\|member, avatarColor` |
-| `Grant` | `id, resourceId, userId, mode: allow\|deny` |
-| `Activity` | `id, actorId, verb, containerId, taskId?, meta, at` |
+| Container | id, name, type (workspace, space, folder, list), parentId, position, visibility (public, private), archivedAt |
+| Status | id, listId, name, category (todo, in_progress, done), color, position |
+| Task | id, title, description, statusId, priority, assigneeIds, dueDate, position, primaryListId, parentTaskId, createdAt, updatedAt, archivedAt |
+| User | id, name, role (admin, member), avatarColor |
+| Grant | id, resourceId, userId, mode (allow, deny) |
+| Activity | id, actorId, verb, containerId, taskId, meta, at |
 
-**Seed** (`src/data/seed.ts`): 1 workspace, 2 spaces, 2 folders, 3 lists, 20 tasks (2 of them subtasks), 3 users, 3 grants.
+Seed data (`src/data/seed.ts`):
 
 ```
 Acme Inc.
 ├─ Engineering (public)
 │  └─ Q2 Launch
-│     ├─ Backlog   (public)     Carol: DENY
-│     └─ Sprint 12 (private)    Bob: ALLOW
-└─ Marketing (private)          Carol: ALLOW
+│     ├─ Backlog   (public)     Carol: deny
+│     └─ Sprint 12 (private)    Bob: allow
+└─ Marketing (private)          Carol: allow
    └─ Campaigns
       └─ Social
 ```
 
-**Rules enforced in the store:**
-- **Hierarchy:**
-  - The valid parents are `workspace→space`, `space→folder`, `space→list` and `folder→list`. Lists hold tasks, never containers.
-  - Siblings are ordered by `position`, which is re-indexed after every move.
-- **Tasks:**
-  - The title is required and at most 500 characters.
-  - The status must belong to the task's list.
-  - Priority must be in the enum.
-  - Assignees must exist.
-  - The due date must be a valid date.
-- **Moving a task to another list:** its status is remapped to the same category in the target list, and subtasks move with it (one level of subtasks only).
-- **Statuses:**
-  - New lists get `todo / in_progress / done` statuses.
-  - Admins can add, rename, recolour, reorder or delete statuses, but every list keeps at least one status per category.
-  - Deleting a status moves its tasks to another status of the same category.
-- **Soft-delete (my choice):**
-  - Containers and tasks get `archivedAt` instead of being removed. Archiving a container hides its whole subtree.
-  - Every delete asks for confirmation and offers Undo.
-  - *Why:* no data is lost, and Undo is trivial.
+Rules the store enforces:
 
----
+- A space goes in the workspace, a folder goes in a space, and a list goes in a space or a folder.
+- A task needs a title (up to 500 characters) and a status from its own list. Priority, assignees and due date are validated too.
+- When a task moves to another list, its status changes to one with the same category there, and its subtasks move with it.
+- Every list keeps at least one status in each category.
+- Deleting is a soft delete: the item gets an `archivedAt` date instead of being removed. This makes Undo simple and no data is lost.
 
-## 4. How permissions are enforced in the client
+## How permissions are enforced
 
-**Rules** (`src/domain/permissions.ts`):
-- **Admins** see and edit everything.
-- **Members:** a container is visible only if its parent is visible, there's no `deny` grant for them on it (deny beats allow), and it's `public` or they have an `allow` grant. A hidden ancestor hides the whole subtree.
-- **Members** can create, edit, move and delete tasks in lists they can see. Managing spaces, folders, lists and statuses is admin-only.
+- Admins can see and edit everything.
+- A member can see an item if they can see its parent, it isn't denied to them, and it's either public or allowed to them. A deny always wins over an allow.
+- Members can create, edit, move and delete tasks in lists they can see. Only admins can manage spaces, folders, lists and statuses.
 
-**Enforcement is in the store, not only the UI:**
-- **Reads:** every selector (`selectTree`, `selectColumns`, `selectTask`, `selectActivity`…) filters by the acting user. Opening a denied list returns `{ ok: false, error: { code: 'FORBIDDEN', message } }` (treated as 403), and the page shows an *Access denied* state.
-- **Writes:** every mutation starts with `assertListAccess` or `assertCanManageContainers` and returns `FORBIDDEN` on failure. Hiding controls in the UI is only cosmetic; calling the store directly as a member is still refused (covered by unit tests).
-- **Switching users** updates the tree and boards immediately. If the new user can't open the current list, they're moved to one they can see. *Access denied* is shown when a denied list is opened by URL.
+These checks run in the store, not just in the UI. Selectors filter every read by the current user. Every mutation checks permissions first and returns a `FORBIDDEN` error if the check fails. Opening a list you can't see by URL shows "Access denied". Switching to a user who can't see the open list takes them to a list they can see.
 
-**How I'd extend the model:**
-- **Teams:** a `Team { id, memberIds }` entity, with grants targeting a user or a team. A user's own deny would beat a team allow.
-- **Roles per resource** (viewer / editor / owner), with `canEdit` separate from `canView`.
+To extend this, I'd add teams (grants for a team as well as a user) and per-item roles like viewer, editor and owner.
 
----
+## Important technical decisions
 
-## 5. Important technical decisions
+- Business rules live in plain functions outside React and Redux, so they're easy to unit-test.
+- Every store action returns the same result shape: `{ ok: true, data }` or `{ ok: false, error }`.
+- A fake async API adds latency and can simulate failures, so loading, error and rollback states are real.
+- Lists have their own URL (`/lists/:listId`). Access is checked again on every load.
+- Saved data is checked when it loads. If it's invalid, the app falls back to the seed.
+- Error messages are written for users, and error boundaries stop one broken view from crashing the whole app.
 
-- **Business rules in pure functions** (`domain/`, `store/mutations/`), separate from React and Redux, so they're unit-tested in isolation, and reducers only commit results.
-- **Redux Toolkit:** thunks that return a consistent `Result`, event-style slice actions, and `createSelector` for derived data. Toast callbacks are kept outside the store so state stays serializable.
-- **Persistence:**
-  - The `workspace` slice is saved to `localStorage`.
-  - Saved data is shape-checked on load and falls back to the seed if invalid.
-- **A fake async API** (`store/api.ts`): it exercises real loading, error and optimistic-update paths, and marks where a real backend would plug in.
-- **Lists are addressable by id** (`/lists/:listId`). The URL is never trusted: access is re-checked for the current user on every load.
-- **Error handling:**
-  - One error shape everywhere: `{ code, message, fields? }`.
-  - Messages are plain language; error codes are never shown.
-  - Error boundaries keep a rendering failure from blanking the app.
+## Assumptions and deviations
 
----
+- Folders are optional. A list can sit directly in a space.
+- Only admins manage containers and statuses, because the brief only says members "can edit tasks".
+- "Access denied" appears when a hidden list is opened by URL. Switching users redirects instead.
+- A status's category can't be changed, so a list can't lose its last status in a category by accident.
+- Reordering works within the same parent only. Nothing can be moved to a new parent.
 
-## 6. Assumptions and deviations
+## Stretch goals attempted
 
-| Topic | Brief | What Flowboard does | Why |
-|---|---|---|---|
-| **Folders** | `workspace → space → folder → list` | **Deviation:** folders are optional; a list can sit directly in a space | Not every space needs a folder level.|
-| **Who manages containers** | Members *"can edit tasks"* | Creating, renaming, archiving and reordering containers, and configuring statuses, are admin-only | The members row grants task editing only |
-| **Access denied** | A denied resource shows a clear error | Shown when a denied list is opened by URL; switching user redirects instead | Switching is navigation; a link is an explicit request |
-| **Statuses** | Minimum todo / in_progress / done per list | At least one per category is enforced; a status's category can't be changed | Changing a category could silently break the minimum |
-| **Reordering** | *"Reorder siblings"* | Reorder within the same parent at every level; no re-parenting | The brief asks for siblings only |
-| **Required fields** | `title`, `status` | Validated in the store and marked in the form | Validation lives in the store |
+1. **Optimistic drag and drop with rollback.** A moved card updates right away. If saving fails, it goes back and an error appears. Turn on "Simulate failures" to try it.
+2. **Activity feed.** Task and container changes are logged and shown per list and per task. The feed respects permissions.
+3. **Deployed on Cloudflare** 
+   Live URL: https://flowboard.sunidhijain2002.workers.dev/
 
----
+## Trade-offs and week 2
 
-## 7. Stretch goals attempted
+What I cut:
 
-1. **Optimistic UI on drag-and-drop, with rollback.** A move is applied immediately, then "persisted". On failure, exactly the tasks it touched are restored and its activity entry is removed. Try it with the **Simulate failures** toggle.
-2. **Activity feed.** Task and container changes are logged (e.g. "Alice moved *Fix login* from To do to Done"). They're shown per list and per task, and filtered by permission.
-3. **Deployed preview on Cloudflare Pages.** 
-   - **Live URL:** https://flowboard.sunidhijain2002.workers.dev
+- There's no screen for managing grants. They come from the seed.
+- Spaces, folders and lists can be reordered but not moved to a new parent.
+- Descriptions are plain text.
 
----
+What I'd do in week 2:
 
-## 8. DnD `style=` exceptions
-
-The only inline styles in the codebase are the `transform`/`transition` values that dnd-kit computes for draggable items:
-- `features/board/TaskCard.tsx` (`SortableTaskCard`)
-- `features/sidebar/TreeNode.tsx` (sortable tree rows)
-
-Everything else is Tailwind utility classes. `src/index.css` contains only the three `@tailwind` directives that Tailwind requires.
-
----
-
-## 9. Trade-offs: what I cut, and what I'd do in week 2
-
-**Cut or simplified**
-- **No grant-management UI.** Grants come from the seed.
-- **Container drag-and-drop is reorder-only.** There's no moving a folder or list to another parent.
-- **Plain-text descriptions**, with no markdown rendering.
-
-**What I would do in Week 2**
-1. **Check assignees against list access.** Today the store only checks that an assignee exists, so a user can be assigned a task in a list they can't see.
-2. **Stop activity entries from exposing task titles after a move.** Entries are filtered by the list they were logged in.
-   - *Fix:* also filter by the task's current list, or redact the title for readers who can no longer see the task.
-3. A permission management system.
+1. Check that assignees can see the task's list. Today the store only checks that the user exists.
+2. Hide task titles in the activity feed from people who can no longer see the task after it moved.
+3. A screen for managing permissions.
 4. Search and filters (assignee, priority, overdue).
-5. Drag-to-reorder status columns, and safe category changes.
-7. List virtualisation, and Activity pagination.
----
+5. Reordering status columns by dragging.
+6. Virtualised long lists and paginated activity.
 
-## 10. AI usage log
+## AI usage log
 
-**Full details (a phase-by-phase split of my work vs the AI's, the issues I identified and the product feedback I gave) are in [`AI_USAGE.md`](./AI_USAGE.md).**
+Claude Code was used as a development assistant for implementation, testing, debugging and refactoring. I made the product and architecture decisions, reviewed every change, and verified the final implementation.
 
-- **Tool:** Claude Code, used as a development assistant throughout the project.
-- **Where it helped:** implementation drafts, tests, debugging suggestions and refactoring suggestions.
-- **My role:**
-  - reviewed the plan and cross-checked it against the requirements before any code was written
-  - made the product and architecture decisions (e.g. Redux Toolkit, optional folders, how permissions behave)
-  - reviewed and tested every change
-- **Where I corrected it:** manual testing caught issues the automated tests missed (hidden folder creation, a 404 after archiving every space, a select arrow outside its field), and I refined the permissions UX, task form, assignee picker and error messages.
-- **Code structure:** I prioritised splitting the large files and making Redux action names consistent.
+**The full log is in [AI_USAGE.md](./AI_USAGE.md).**
