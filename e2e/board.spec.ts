@@ -1,13 +1,16 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
-/** dnd-kit needs real pointer movement (activation distance), not a synthetic drop. */
-async function dragTo(page: Page, source: Locator, target: Locator) {
+/**
+ * dnd-kit needs real pointer movement (activation distance), not a synthetic drop.
+ * Drops ~60px below the target's top edge, or `fromBottom` px above its bottom edge.
+ */
+async function dragTo(page: Page, source: Locator, target: Locator, { fromBottom }: { fromBottom?: number } = {}) {
   const from = (await source.boundingBox())!;
   const to = (await target.boundingBox())!;
   await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
   await page.mouse.down();
   await page.mouse.move(from.x + from.width / 2 + 10, from.y + from.height / 2 + 10, { steps: 5 });
-  await page.mouse.move(to.x + to.width / 2, to.y + 60, { steps: 20 });
+  await page.mouse.move(to.x + to.width / 2, fromBottom === undefined ? to.y + 60 : to.y + to.height - fromBottom, { steps: 20 });
   await page.mouse.up();
 }
 
@@ -99,4 +102,17 @@ test('a column emptied by dragging out its last card still accepts drops (near t
   // dragTo aims ~60px below the column's top edge, where the first card would go
   await dragTo(page, card(page, 'Add rate limiting to public API'), column(page, 'In review'));
   await expect(column(page, 'In review').getByText('Add rate limiting to public API')).toBeVisible();
+});
+
+test('dropping a card in the empty space below its column moves it to the bottom (and it stays there)', async ({ page }) => {
+  const todoCards = column(page, 'To do').getByRole('button', { name: /\. Press Enter/ });
+  const before = await todoCards.allTextContents();
+  const first = (await todoCards.first().getAttribute('aria-label'))!.split('.')[0]!;
+
+  await dragTo(page, todoCards.first(), column(page, 'To do'), { fromBottom: 30 });
+
+  await expect(todoCards.last()).toHaveAccessibleName(new RegExp(`^${first}\\.`));
+  await expect(todoCards).toHaveCount(before.length);
+  await page.reload();
+  await expect(todoCards.last()).toHaveAccessibleName(new RegExp(`^${first}\\.`));
 });
