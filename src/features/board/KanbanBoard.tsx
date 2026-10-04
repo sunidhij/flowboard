@@ -86,9 +86,10 @@ export function KanbanBoard({ listId }: { listId: ID }) {
     const destIds = (cols[dest.statusId] ?? []).map((t) => t.id);
     let toIndex: number;
     if (dest.statusId === task.statusId) {
-      if (!dest.overTaskId || dest.overTaskId === task.id) return;
-      // same column: arrayMove semantics (take the over card's slot)
-      toIndex = destIds.indexOf(dest.overTaskId);
+      if (dest.overTaskId === task.id) return;
+      // same column: arrayMove semantics (take the over card's slot); the empty space below the
+      // last card means "move to the end"
+      toIndex = dest.overTaskId ? destIds.indexOf(dest.overTaskId) : destIds.length - 1;
       const reordered = moveId(destIds, task.id, toIndex);
       if (reordered.join() === destIds.join()) return;
     } else {
